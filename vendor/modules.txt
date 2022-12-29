@@ -1,0 +1,29 @@
+# github.com/google/uuid v1.3.0
+## explicit
+github.com/google/uuid
+# github.com/gorilla/websocket v1.5.0
+## explicit; go 1.12
+github.com/gorilla/websocket
+# github.com/pelletier/go-toml/v2 v2.0.6
+## explicit; go 1.16
+github.com/pelletier/go-toml/v2
+github.com/pelletier/go-toml/v2/internal/characters
+github.com/pelletier/go-toml/v2/internal/danger
+github.com/pelletier/go-toml/v2/internal/tracker
+github.com/pelletier/go-toml/v2/unstable
+# github.com/taosdata/driver-go/v3 v3.0.4
+## explicit; go 1.14
+github.com/taosdata/driver-go/v3/af
+github.com/taosdata/driver-go/v3/af/async
+github.com/taosdata/driver-go/v3/af/insertstmt
+github.com/taosdata/driver-go/v3/af/locker
+github.com/taosdata/driver-go/v3/common
+github.com/taosdata/driver-go/v3/common/param
+github.com/taosdata/driver-go/v3/common/parser
+github.com/taosdata/driver-go/v3/errors
+github.com/taosdata/driver-go/v3/taosSql
+github.com/taosdata/driver-go/v3/types
+github.com/taosdata/driver-go/v3/wrapper
+github.com/taosdata/driver-go/v3/wrapper/cgo
+github.com/taosdata/driver-go/v3/wrapper/handler
+github.com/taosdata/driver-go/v3/wrapper/thread
