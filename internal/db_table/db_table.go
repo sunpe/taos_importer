@@ -260,14 +260,19 @@ func createTableSql(param TableParam) string {
 				continue
 			}
 
+			value := fmt.Sprintf("'%s'", tv.TagValue)
+			if strings.Index(value, "'") >= 0 {
+				value = strings.ReplaceAll(value, "'", "\\'")
+			}
+
 			tagBuffer.WriteString(tv.TagName)
 			tagBuffer.WriteString(", ")
 
 			if strings.HasPrefix(tv.TagValueType, "binary") || strings.HasPrefix(tv.TagValueType, "nchar") ||
 				strings.HasPrefix(tv.TagValueType, "varchar") || strings.HasPrefix(tv.TagValueType, "json") {
-				tagValueBuffer.WriteString(fmt.Sprintf("'%s'", tv.TagValue))
+				tagValueBuffer.WriteString(fmt.Sprintf("'%s'", value))
 			} else {
-				tagValueBuffer.WriteString(fmt.Sprintf("%s", tv.TagValue))
+				tagValueBuffer.WriteString(fmt.Sprintf("%s", value))
 			}
 			tagValueBuffer.WriteString(", ")
 		}

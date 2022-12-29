@@ -280,7 +280,7 @@ func newDatetimeCache(size int) *datetimeCache {
 
 func (c *datetimeCache) cache(x int64) {
 	c.Lock()
-	c.Unlock()
+	defer c.Unlock()
 
 	if len(c.data) >= c.size {
 		c.data = c.data[1:]

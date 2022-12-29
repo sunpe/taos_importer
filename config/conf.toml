@@ -24,9 +24,11 @@ data_file_suffix = ".csv"
 # optional. 指定 tag 的文件列表。其含义及使用规则类似 data_files
 tags_files = ["/Users/sunpeng/workspace/tmp/taos/tag/tag.csv"]
 # optional. 每批写入的记录数。
-batch_size = 10
+batch_size = 10000
+# 一次处理的文件数
+deal_one_time = 100
 # 最大并发处理
-concurrent = 1
+concurrent = 100
 
 [tdengine]
 # Required. tdengine host
@@ -61,7 +63,7 @@ vgrooups = 1
 name = "t_stock_detail_date_l2_transaction"
 # Optional。表名模版，比如 t_{code}_{name}，如果不指定，则取所有 tag 的 hash
 child_table_name_prefix = "t_"
-child_table_name = "contact(\"t_\", sub_str(S_INFO_WINDCODE, 1, index_of(S_INFO_WINDCODE, \".\")))" # optional
+child_table_name = "contact(\"t_\", sub_str(S_INFO_WINDCODE, 0, index_of(S_INFO_WINDCODE, \".\")))" # optional
 
 # 超级表 column，类型为 column 数组
 [[stable.columns]]

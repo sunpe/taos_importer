@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -42,16 +43,31 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 		conf.AutoCreate = *autoCreate
 		conf.OutputFile = *outputFile
 	}
+	if len(conf.OutputFile) == 0 {
+		conf.OutputFile = "./importer.log"
+	}
+
+	output, err := os.OpenFile(conf.OutputFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		log.Printf("## open log fail [%s] fail %v", conf.OutputFile, err)
+		os.Exit(1)
+	}
+	defer func() { _ = output.Close() }()
+
+	logfile := bufio.NewWriter(output)
+	defer func() { _ = logfile.Flush() }()
 
 	// todo create db, stable
 
 	// create child table
 	createTables(ctx, conf)
 	// import data
-	ch := importDataToTable(ctx, conf)
+	ch := make(chan string, 100)
+	go importDataToTable(ctx, conf, ch)
 
 	for msg := range ch {
-		log.Println(msg)
+		_, _ = logfile.WriteString(msg)
+		_, _ = logfile.WriteString("\n")
 	}
 }
 
@@ -177,8 +193,7 @@ func tableParam(db, stable, tableNamePattern string, line map[string]string, tag
 	}
 }
 
-func importDataToTable(ctx context.Context, conf config.Config) chan string {
-	ch := make(chan string, 10)
+func importDataToTable(ctx context.Context, conf config.Config, ch chan string) {
 	defer close(ch)
 	//
 	dataFiles, err := getFiles(conf.DataDir, conf.DataFiles, conf.DataFileSuffix)
@@ -189,13 +204,11 @@ func importDataToTable(ctx context.Context, conf config.Config) chan string {
 
 	var wait sync.WaitGroup
 
-	for i := 0; i < conf.Concurrent; i++ {
+	for i := 0; i < conf.DealOneTime; i++ {
 		wait.Add(1)
 		go doImport(ctx, conf, dataFiles, &wait, ch)
 	}
 	wait.Wait()
-
-	return ch
 }
 
 func doImport(ctx context.Context, conf config.Config, files chan string, w *sync.WaitGroup, messages chan string) {
@@ -271,29 +284,42 @@ func getFilesFromFilesConf(dataFiles []string) chan string {
 }
 
 func getFilesFromDir(dataDir string, suffix string) (chan string, error) {
-	dirFiles, err := os.ReadDir(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
 	files := make(chan string, 10)
 
 	go func() {
 		defer close(files)
-		for _, file := range dirFiles {
-			if file.IsDir() {
-				continue
-			}
-
-			if !strings.HasSuffix(file.Name(), suffix) {
-				continue
-			}
-
-			files <- path.Join(dataDir, file.Name())
+		fs, err := listDir(dataDir, suffix)
+		if err != nil {
+			log.Printf("## read file from dir-[%s] error %v", dataDir, err)
+			os.Exit(1)
+		}
+		for _, f := range fs {
+			files <- f
 		}
 	}()
 
 	return files, nil
+}
+
+func listDir(dir string, suffix string) (files []string, err error) {
+	dirFiles, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range dirFiles {
+		if file.IsDir() {
+			fs, _ := listDir(path.Join(dir, file.Name()), suffix)
+			files = append(files, fs...)
+		}
+
+		if !strings.HasSuffix(file.Name(), suffix) {
+			continue
+		}
+
+		files = append(files, path.Join(dir, file.Name()))
+	}
+	return
 }
 
 func getFilesFromDirAndFiles(dataDir string, dataFiles []string) chan string {

@@ -128,7 +128,7 @@ func (c *CsvImporter) do(_ context.Context, lines []map[string]any) {
 	}
 	if err = stmt.BindParam(params, c.columnTypes); err != nil {
 		c.ErrorCount.Add(int64(len(lines)))
-		log.Println("## bind params error ", err)
+		log.Println("## bind params error ", c.table, err)
 		return
 	}
 	if err = stmt.AddBatch(); err != nil {
