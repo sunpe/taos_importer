@@ -97,12 +97,12 @@ func (c *CsvImporter) doImport(ctx context.Context, ch chan map[string]string, w
 				c.do(ctx, lines)
 				return
 			}
+
 			lines = append(lines, common.StrMap2AnyMap(data))
 			if len(lines) >= c.batchSize {
 				c.do(ctx, lines)
 				lines = make([]map[string]any, 0, c.batchSize)
 			}
-			ticker.Reset(tickerDuration)
 		case <-ticker.C:
 			c.do(ctx, lines)
 			lines = make([]map[string]any, 0, c.batchSize)
@@ -117,15 +117,21 @@ func (c *CsvImporter) do(_ context.Context, lines []map[string]any) {
 
 	stmt := c.conn.InsertStmt()
 	err := stmt.Prepare(c.insertSql)
+	if err != nil {
+		log.Printf("## prepare sql %s error %v", c.insertSql, err)
+		return
+	}
 	defer func() { _ = stmt.Close() }()
 
 	c.Total.Add(int64(len(lines)))
 	params, err := c.params(lines)
+
 	if err != nil {
 		c.ErrorCount.Add(int64(len(lines)))
 		log.Println("## parse params error ", err)
 		return
 	}
+
 	if err = stmt.BindParam(params, c.columnTypes); err != nil {
 		c.ErrorCount.Add(int64(len(lines)))
 		log.Println("## bind params error ", c.table, err)
@@ -229,6 +235,7 @@ func (c *CsvImporter) columnType() (*param.ColumnType, error) {
 
 func (c *CsvImporter) params(lines []map[string]any) (params []*param.Param, err error) {
 	params = make([]*param.Param, 0, len(c.columns))
+
 	for _, column := range c.columns {
 		source := column.Source
 		if len(source) == 0 {

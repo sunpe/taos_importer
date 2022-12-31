@@ -163,15 +163,15 @@ func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 	}
 
 	if usedDatetime == nil {
-		cacheSizeArg, err := eval(args[1], data)
+		cacheArg, err := eval(args[1], data)
 		if err != nil {
 			return nil, err
 		}
-		cacheSize, err := common.Int(cacheSizeArg)
+		cache, err := common.Int(cacheArg)
 		if err != nil {
 			return nil, err
 		}
-		usedDatetime = newDatetimeCache(cacheSize)
+		usedDatetime = newDatetimeCache(cache)
 	}
 
 	date, err := common.Time(dateArg)
@@ -180,13 +180,16 @@ func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 	}
 
 	for {
-		unixMicro := date.UnixNano()
-		if exist := usedDatetime.exists(unixMicro); !exist {
-			usedDatetime.cache(unixMicro)
+		unixNano := date.UnixNano()
+		exist := usedDatetime.exists(unixNano)
+
+		if !exist {
+			usedDatetime.cache(unixNano)
 			break
 		}
-		date = date.Add(time.Microsecond)
+		date = date.Add(time.Nanosecond)
 	}
+	// todo
 
 	return date, nil
 }
@@ -265,6 +268,28 @@ func _nsFormatStyle(format, date string, old, new string) (string, string) {
 	return format, date
 }
 
+//type datetimeCache struct {
+//	data     *bigcache.BigCache
+//	duration time.Duration
+//}
+//
+//func newDatetimeCache(duration time.Duration) *datetimeCache {
+//	cacheConf := bigcache.DefaultConfig(duration)
+//	cacheConf.CleanWindow = 100 * duration
+//	cache, _ := bigcache.New(context.Background(), cacheConf)
+//
+//	return &datetimeCache{data: cache, duration: duration}
+//}
+//
+//func (c *datetimeCache) cache(x int64) {
+//	_ = c.data.Set(common.String(x), []byte{})
+//}
+//
+//func (c *datetimeCache) exists(x int64) bool {
+//	b, _ := c.data.Get(common.String(x))
+//	return b != nil
+//}
+
 type datetimeCache struct {
 	sync.RWMutex
 
@@ -273,7 +298,7 @@ type datetimeCache struct {
 }
 
 func newDatetimeCache(size int) *datetimeCache {
-	s := make([]int64, 0, size+2)
+	s := make([]int64, 0, size*2+100)
 	c := datetimeCache{data: s, size: size}
 	return &c
 }
@@ -282,8 +307,8 @@ func (c *datetimeCache) cache(x int64) {
 	c.Lock()
 	defer c.Unlock()
 
-	if len(c.data) >= c.size {
-		c.data = c.data[1:]
+	if len(c.data) >= c.size*2 {
+		c.data = c.data[c.size:]
 	}
 	c.data = append(c.data, x)
 	sort.Sort(c)

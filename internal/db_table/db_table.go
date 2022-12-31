@@ -260,7 +260,7 @@ func createTableSql(param TableParam) string {
 				continue
 			}
 
-			value := fmt.Sprintf("'%s'", tv.TagValue)
+			value := fmt.Sprintf("%s", tv.TagValue)
 			if strings.Index(value, "'") >= 0 {
 				value = strings.ReplaceAll(value, "'", "\\'")
 			}

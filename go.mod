@@ -3,6 +3,7 @@ module taos_importer
 go 1.19
 
 require (
+	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/pelletier/go-toml/v2 v2.0.6
 	github.com/taosdata/driver-go/v3 v3.0.4
 )

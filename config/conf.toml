@@ -1,13 +1,13 @@
 # optional. 配置文件 title optional
 title = "数据导入样例"
 # optional. 是否自动创建所配置的DB和超级表, true|false, 默认 true. 同命令行参数 auto-create，但优先级低于命令行,
-auto_create = true
+auto_create = false
 # optional. 结果输出的目标文件，同命令行参数 output-file，但优先级低于命令行
 output_file = ""
 # optional. 导入数据所在路径。
 # 如果指定该参数，则所有文件名相关的配置如果不是绝对路径的话即在该目录下以相对路径进行搜索。
 # 如果未指定该参数，则所有文件名相关的配置必须为绝对路径。
-data_dir = "/Users/sunpeng/workspace/tmp/taos/data"
+data_dir = "/Users/sunpeng/workspace/tmp/taos/data/20221227"
 # optional. 数据文件名后缀，仅在指定了 data_dir 时有效。此时要处理的文件集合为 data_dir 下符合后缀名规则的所有文件。
 # 在 data_dir 设置的情况下，data_files 和 file_suffix 互斥，二者只可取其一。
 # 在 data_dir 未设置的情况下，file_suffix 被忽略，设置无效。
@@ -24,11 +24,11 @@ data_file_suffix = ".csv"
 # optional. 指定 tag 的文件列表。其含义及使用规则类似 data_files
 tags_files = ["/Users/sunpeng/workspace/tmp/taos/tag/tag.csv"]
 # optional. 每批写入的记录数。
-batch_size = 10000
+batch_size = 10
 # 一次处理的文件数
-deal_one_time = 100
+deal_one_time = 3
 # 最大并发处理
-concurrent = 100
+concurrent = 2
 
 [tdengine]
 # Required. tdengine host
@@ -42,7 +42,7 @@ password = "taosdata"
 
 [db]
 # db name
-name = "test"
+name = "stock"
 # optional。一个 VNODE 写入内存池大小，单位为 MB，默认为 96。 请参考 https://docs.taosdata.com/taos-sql/database/
 buffer = 96
 # optional。否在内存中缓存子表的最近数据。默认为 none，其他可选值有last_row｜last_value｜both。请参考 https://docs.taosdata.com/taos-sql/database/
@@ -54,7 +54,7 @@ duration = "10d"
 # optional。表示数据文件保存的天数，缺省值为 3650，取值范围 [1, 365000]，且必须大于或等于 DURATION 参数值。 请参考 https://docs.taosdata.com/taos-sql/database/
 keep = 3650
 # optional。数据库的时间戳精度，taos_importer 默认 us。 请参考 https://docs.taosdata.com/taos-sql/database/
-precision = "us"
+precision = "ns"
 # optional。DB中vgroup的数量，请参考 https://docs.taosdata.com/taos-sql/database/
 vgrooups = 1
 
@@ -80,13 +80,13 @@ type = "int"
 source = "code"
 
 [[stable.columns]]
-filed = "wind_code"
+field = "wind_code"
 type = "varchar(10)"
 source = "wind_code"
 
 [[stable.columns]]
 field = "name"
-type = "nchar(20)"
+type = "nchar(100)"
 source = "name"
 
 [[stable.columns]]
@@ -122,7 +122,7 @@ source = "ask_order"
 [[stable.columns]]
 field = "bid_order"
 type = "int"
-source = "int"
+source = "bid_order"
 
 [[stable.columns]]
 field = "channel"
@@ -157,12 +157,12 @@ source = "S_INFO_CODE"
 
 [[stable.tags]]
 field = "S_INFO_NAME"
-type = "nchar(10)"
+type = "nchar(50)"
 source = "S_INFO_NAME"
 
 [[stable.tags]]
 field = "S_INFO_COMPNAME"
-type = "nchar(20)"
+type = "nchar(50)"
 source = "S_INFO_COMPNAME"
 
 [[stable.tags]]

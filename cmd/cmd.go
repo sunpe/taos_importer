@@ -57,10 +57,11 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 	logfile := bufio.NewWriter(output)
 	defer func() { _ = logfile.Flush() }()
 
-	// todo create db, stable
-
 	// create child table
-	createTables(ctx, conf)
+	if conf.AutoCreate {
+		// todo create db, stable
+		createTables(ctx, conf)
+	}
 	// import data
 	ch := make(chan string, 100)
 	go importDataToTable(ctx, conf, ch)
