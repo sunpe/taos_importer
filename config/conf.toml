@@ -28,7 +28,7 @@ batch_size = 10
 # 一次处理的文件数
 deal_one_time = 3
 # 最大并发处理
-concurrent = 2
+concurrent = 5
 
 [tdengine]
 # Required. tdengine host

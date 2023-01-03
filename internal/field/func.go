@@ -275,7 +275,6 @@ func _nsFormatStyle(format, date string, old, new string) (string, string) {
 type datetimeCache struct {
 	data      *bigcache.BigCache
 	precision string
-	lock      sync.RWMutex
 }
 
 func newDatetimeCache(duration time.Duration, precision string) *datetimeCache {
@@ -287,9 +286,6 @@ func newDatetimeCache(duration time.Duration, precision string) *datetimeCache {
 }
 
 func (c *datetimeCache) cacheAndGet(x time.Time) time.Time {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	ts := c.get(x)
 	key := common.String(ts)
 	for {
