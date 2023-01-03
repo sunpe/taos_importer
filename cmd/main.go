@@ -86,14 +86,12 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 	logfile := bufio.NewWriter(output)
 	defer func() { _ = logfile.Flush() }()
 
+	// todo create db, stable
 	// create child table
-	if conf.AutoCreate {
-		// todo create db, stable
-		createTables(ctx, conf)
-	}
+	tableNames := createTables(ctx, conf, conf.AutoCreate)
 	// import data
 	ch := make(chan string, 100)
-	go importDataToTable(ctx, conf, ch)
+	go importDataToTable(ctx, conf, ch, tableNames)
 
 	for msg := range ch {
 		_, _ = logfile.WriteString(msg)
@@ -153,8 +151,8 @@ func createSTable(ctx context.Context, conf config.Config) {
 	}
 }
 
-func createTables(ctx context.Context, conf config.Config) {
-	tableFiles, err := getFiles(conf.TagsDir, conf.TagsFiles, conf.TagsFileSuffix)
+func createTables(ctx context.Context, conf config.Config, autoCreate bool) (tables map[string]struct{}) {
+	tableFiles, err := getFiles(conf.TagsDir, conf.TagsFiles, conf.TagsFileSuffix, "", nil)
 	if err != nil {
 		log.Printf("## get tag file error %v", err)
 		os.Exit(1)
@@ -167,6 +165,8 @@ func createTables(ctx context.Context, conf config.Config) {
 		os.Exit(1)
 	}
 
+	tbNameCh := make(chan string, 10)
+	tables = make(map[string]struct{}, 100)
 	var wait sync.WaitGroup
 
 	for i := 0; i < 10; i++ {
@@ -182,7 +182,12 @@ func createTables(ctx context.Context, conf config.Config) {
 				}
 
 				for line := range ch {
-					param := tableParam(conf.DB.Name, conf.STable.Name, conf.STable.ChildTableName, line, conf.STable.Tags)
+					param, tbCode := tableParam(conf.DB.Name, conf.STable.Name, conf.STable.ChildTableName, line, conf.STable.Tags)
+					tbNameCh <- tbCode
+
+					if !autoCreate {
+						continue
+					}
 					if err = dt.CreateTable(ctx, param); err != nil {
 						log.Printf("## create table [%s] error %v \n", param.TableName, err)
 						os.Exit(1)
@@ -192,10 +197,19 @@ func createTables(ctx context.Context, conf config.Config) {
 		}(tableFiles, &wait)
 	}
 
-	wait.Wait()
+	go func() {
+		defer close(tbNameCh)
+		wait.Wait()
+	}()
+
+	for tbName := range tbNameCh {
+		tables[tbName] = struct{}{}
+	}
+
+	return
 }
 
-func tableParam(db, stable, tableNamePattern string, line map[string]string, tags []config.Column) db_table.TableParam {
+func tableParam(db, stable, tableNamePattern string, line map[string]string, tags []config.Column) (db_table.TableParam, string) {
 	lineData := common.StrMap2AnyMap(line)
 	tableName, err := db_table.GenerateTableName(tableNamePattern, lineData)
 	if err != nil {
@@ -217,18 +231,13 @@ func tableParam(db, stable, tableNamePattern string, line map[string]string, tag
 		})
 	}
 
-	return db_table.TableParam{
-		DBName:     db,
-		STableName: stable,
-		TableName:  tableName,
-		TagValues:  tagValues,
-	}
+	return db_table.TableParam{DBName: db, STableName: stable, TableName: tableName, TagValues: tagValues}, tableName
 }
 
-func importDataToTable(ctx context.Context, conf config.Config, ch chan string) {
+func importDataToTable(ctx context.Context, conf config.Config, ch chan string, tableNames map[string]struct{}) {
 	defer close(ch)
 	//
-	dataFiles, err := getFiles(conf.DataDir, conf.DataFiles, conf.DataFileSuffix)
+	dataFiles, err := getFiles(conf.DataDir, conf.DataFiles, conf.DataFileSuffix, conf.STable.ChildTableNamePrefix, tableNames)
 	if err != nil {
 		log.Println("## get data file fail.", err)
 		os.Exit(1)
@@ -285,29 +294,32 @@ func getTableName(file string, prefix string) string {
 	return prefix + fileName // todo
 }
 
-func getFiles(dataDir string, dataFiles []string, suffix string) (chan string, error) {
+func getFiles(dataDir string, dataFiles []string, suffix string, tablePrefix string, tableNames map[string]struct{}) (chan string, error) {
 	if len(dataDir) == 0 && len(dataFiles) == 0 {
 		log.Println("## config error, dir config and files config is null")
 		os.Exit(1)
 	}
 
 	if len(dataDir) == 0 && len(dataFiles) != 0 {
-		return getFilesFromFilesConf(dataFiles), nil
+		return getFilesFromFilesConf(dataFiles, tablePrefix, tableNames), nil
 	}
 
 	if len(dataDir) != 0 && len(dataFiles) == 0 {
-		return getFilesFromDir(dataDir, suffix)
+		return getFilesFromDir(dataDir, suffix, tablePrefix, tableNames)
 	}
 
-	return getFilesFromDirAndFiles(dataDir, dataFiles), nil
+	return getFilesFromDirAndFiles(dataDir, dataFiles, tablePrefix, tableNames), nil
 }
 
-func getFilesFromFilesConf(dataFiles []string) chan string {
+func getFilesFromFilesConf(dataFiles []string, tablePrefix string, tableNames map[string]struct{}) chan string {
 	files := make(chan string, 10)
 
 	go func() {
 		defer close(files)
 		for _, file := range dataFiles {
+			if !filterByTableName(file, tablePrefix, tableNames) {
+				continue
+			}
 			files <- file
 		}
 	}()
@@ -315,7 +327,7 @@ func getFilesFromFilesConf(dataFiles []string) chan string {
 	return files
 }
 
-func getFilesFromDir(dataDir string, suffix string) (chan string, error) {
+func getFilesFromDir(dataDir string, suffix string, tablePrefix string, tableNames map[string]struct{}) (chan string, error) {
 	files := make(chan string, 10)
 
 	go func() {
@@ -326,6 +338,9 @@ func getFilesFromDir(dataDir string, suffix string) (chan string, error) {
 			os.Exit(1)
 		}
 		for _, f := range fs {
+			if !filterByTableName(f, tablePrefix, tableNames) {
+				continue
+			}
 			files <- f
 		}
 	}()
@@ -354,19 +369,38 @@ func listDir(dir string, suffix string) (files []string, err error) {
 	return
 }
 
-func getFilesFromDirAndFiles(dataDir string, dataFiles []string) chan string {
+func getFilesFromDirAndFiles(dataDir string, dataFiles []string, tablePrefix string, tableNames map[string]struct{}) chan string {
 	files := make(chan string, 10)
 
 	go func() {
 		defer close(files)
 		for _, f := range dataFiles {
+			var abs string
 			if filepath.IsAbs(f) {
-				files <- f
+				abs = f
+			} else {
+				abs = path.Join(dataDir, f)
+			}
+
+			if !filterByTableName(abs, tablePrefix, tableNames) {
 				continue
 			}
-			files <- path.Join(dataDir, f)
+
+			files <- abs
 		}
 	}()
 
 	return files
+}
+
+func filterByTableName(file string, prefix string, tables map[string]struct{}) bool {
+	if len(tables) == 0 {
+		return true
+	}
+	_, fileName := path.Split(file)
+	ext := path.Ext(file)
+	fileName = strings.Trim(fileName, ext)
+	fileName = prefix + fileName
+	_, exist := tables[fileName]
+	return exist
 }
