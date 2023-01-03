@@ -2,12 +2,14 @@ package field
 
 import (
 	"bytes"
+	"context"
 	"go/ast"
-	"sort"
 	"strings"
 	"sync"
 	"taos_importer/internal/common"
 	"time"
+
+	"github.com/allegro/bigcache/v3"
 )
 
 func init() {
@@ -98,17 +100,17 @@ func subStr(args []ast.Expr, data map[string]any) (any, error) {
 }
 
 func contact(args []ast.Expr, data map[string]any) (any, error) {
-	strs := make([]string, 0, len(args))
+	ss := make([]string, 0, len(args))
 
 	for _, arg := range args {
 		strArg, err := eval(arg, data)
 		if err != nil {
 			return nil, err
 		}
-		strs = append(strs, common.String(strArg))
+		ss = append(ss, common.String(strArg))
 	}
 
-	return strings.Join(strs, ""), nil
+	return strings.Join(ss, ""), nil
 }
 
 func indexOf(args []ast.Expr, data map[string]any) (any, error) {
@@ -152,44 +154,46 @@ func dateParse(args []ast.Expr, data map[string]any) (any, error) {
 }
 
 var usedDatetime *datetimeCache
+var avoidDatetimeLocker sync.Mutex
 
 func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
-	if len(args) != 2 {
+	if len(args) != 3 {
 		return nil, illegalParams
 	}
 	dateArg, err := eval(args[0], data)
 	if err != nil {
 		return nil, err
 	}
-
-	if usedDatetime == nil {
-		cacheArg, err := eval(args[1], data)
-		if err != nil {
-			return nil, err
-		}
-		cache, err := common.Int(cacheArg)
-		if err != nil {
-			return nil, err
-		}
-		usedDatetime = newDatetimeCache(cache)
-	}
-
 	date, err := common.Time(dateArg)
 	if err != nil {
 		return nil, err
 	}
 
-	for {
-		unixNano := date.UnixNano()
-		exist := usedDatetime.exists(unixNano)
+	if usedDatetime == nil {
+		avoidDatetimeLocker.Lock()
+		defer avoidDatetimeLocker.Unlock()
 
-		if !exist {
-			usedDatetime.cache(unixNano)
-			break
+		if usedDatetime == nil {
+			durationArg, err := eval(args[1], data) // cache duration
+			if err != nil {
+				return nil, err
+			}
+			precisionArg, err := eval(args[2], data) //timestamp precision
+			if err != nil {
+				return nil, err
+			}
+
+			duration, err := common.Int64(durationArg)
+			if err != nil {
+				return nil, err
+			}
+			precision := common.String(precisionArg)
+
+			usedDatetime = newDatetimeCache(time.Duration(duration)*time.Millisecond, precision)
 		}
-		date = date.Add(time.Nanosecond)
 	}
-	// todo
+
+	date = usedDatetime.cacheAndGet(date)
 
 	return date, nil
 }
@@ -268,80 +272,57 @@ func _nsFormatStyle(format, date string, old, new string) (string, string) {
 	return format, date
 }
 
-//type datetimeCache struct {
-//	data     *bigcache.BigCache
-//	duration time.Duration
-//}
-//
-//func newDatetimeCache(duration time.Duration) *datetimeCache {
-//	cacheConf := bigcache.DefaultConfig(duration)
-//	cacheConf.CleanWindow = 100 * duration
-//	cache, _ := bigcache.New(context.Background(), cacheConf)
-//
-//	return &datetimeCache{data: cache, duration: duration}
-//}
-//
-//func (c *datetimeCache) cache(x int64) {
-//	_ = c.data.Set(common.String(x), []byte{})
-//}
-//
-//func (c *datetimeCache) exists(x int64) bool {
-//	b, _ := c.data.Get(common.String(x))
-//	return b != nil
-//}
-
 type datetimeCache struct {
-	sync.RWMutex
-
-	data []int64
-	size int
+	data      *bigcache.BigCache
+	precision string
+	lock      sync.RWMutex
 }
 
-func newDatetimeCache(size int) *datetimeCache {
-	s := make([]int64, 0, size*2+100)
-	c := datetimeCache{data: s, size: size}
-	return &c
+func newDatetimeCache(duration time.Duration, precision string) *datetimeCache {
+	cacheConf := bigcache.DefaultConfig(duration)
+	cacheConf.CleanWindow = 100 * duration
+	cache, _ := bigcache.New(context.Background(), cacheConf)
+
+	return &datetimeCache{data: cache, precision: precision}
 }
 
-func (c *datetimeCache) cache(x int64) {
-	c.Lock()
-	defer c.Unlock()
+func (c *datetimeCache) cacheAndGet(x time.Time) time.Time {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-	if len(c.data) >= c.size*2 {
-		c.data = c.data[c.size:]
-	}
-	c.data = append(c.data, x)
-	sort.Sort(c)
-}
-
-func (c *datetimeCache) exists(x int64) bool {
-	c.RLock()
-	defer c.RUnlock()
-
-	i, j := 0, len(c.data)
-	for i < j {
-		h := int(uint(i+j) >> 1)
-		if c.data[h] == x {
-			return true
+	ts := c.get(x)
+	key := common.String(ts)
+	for {
+		if _, err := c.data.Get(key); err == bigcache.ErrEntryNotFound {
+			break
 		}
-		if c.data[h] > x {
-			j = h
-		} else {
-			i = h + 1
-		}
+
+		ts, x = c.addAndGet(x)
+		key = common.String(ts)
 	}
 
-	return false
+	_ = c.data.Set(key, []byte{})
+	return x
 }
 
-func (c *datetimeCache) Len() int {
-	return len(c.data)
+func (c *datetimeCache) get(ts time.Time) int64 {
+	if c.precision == "ns" {
+		return ts.UnixNano()
+	} else if c.precision == "us" {
+		return ts.UnixMicro()
+	}
+	return ts.UnixMilli()
 }
 
-func (c *datetimeCache) Less(i, j int) bool {
-	return c.data[i] < c.data[j]
-}
+func (c *datetimeCache) addAndGet(ts time.Time) (int64, time.Time) {
+	if c.precision == "ns" {
+		ts = ts.Add(time.Nanosecond)
+		return ts.UnixNano(), ts
+	} else if c.precision == "us" {
+		ts = ts.Add(time.Microsecond)
+		return ts.UnixMicro(), ts
+	}
 
-func (c *datetimeCache) Swap(i, j int) {
-	c.data[i], c.data[j] = c.data[j], c.data[i]
+	ts = ts.Add(time.Millisecond)
+	return ts.UnixMilli(), ts
 }
