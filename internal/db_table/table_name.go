@@ -13,7 +13,7 @@ func GenerateTableName(pattern string, tags map[string]any) (string, error) {
 		return generateTableNameByTags(tags), nil
 	}
 
-	tableName, err := field.Extract(pattern, tags)
+	tableName, err := field.DefaultExtractor.Extract(pattern, tags)
 	return common.String(tableName), err
 }
 

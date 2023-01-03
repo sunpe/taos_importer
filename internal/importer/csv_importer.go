@@ -30,6 +30,8 @@ type CsvImporter struct {
 	precision   int
 	columnTypes *param.ColumnType
 	insertSql   string
+	locker      sync.Mutex
+	extractor   *field.Extractor
 
 	// aggregate
 	Total      atomic.Int64
@@ -51,6 +53,7 @@ func NewCsvImporter(conf config.Config, table string) (importer *CsvImporter, er
 		concurrent: conf.Concurrent,
 		batchSize:  conf.BatchSize,
 	}
+	importer.extractor = field.NewExtractor(&importer.locker)
 	importer.precision = dbPrecision(conf.DB.Precision)
 	importer.insertSql = importer.stmtSql()
 	importer.columnTypes, err = importer.columnType()
@@ -245,7 +248,7 @@ func (c *CsvImporter) params(lines []map[string]any) (params []*param.Param, err
 		p := param.NewParam(len(lines))
 		for _, line := range lines {
 
-			value, err := field.Extract(source, line)
+			value, err := c.extractor.Extract(source, line)
 			if err != nil {
 				return nil, err
 			}

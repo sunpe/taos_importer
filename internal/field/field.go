@@ -14,23 +14,47 @@ import (
 var emptyExpression = errors.New("field is nil")
 var illegalParams = errors.New("illegal params")
 
-var expressionCache sync.Map // cache expression parsed result, key is expression, value is ast.Expr
+var defaultLocker sync.Mutex
+var DefaultExtractor = NewExtractor(&defaultLocker)
 
-func Extract(expression string, data map[string]any) (any, error) {
-	expr, err := parseExpression(expression)
+func NewExtractor(locker sync.Locker) *Extractor {
+	e := &Extractor{
+		locker: locker,
+	}
+	e.funcMap = map[string]func(args []ast.Expr, data map[string]any) (any, error){
+		"left_pad":                e.leftPad,
+		"right_pad":               e.rightPad,
+		"date_parse":              e.dateParse,
+		"avoid_datetime_conflict": e.avoidDatetimeConflict,
+		"sub_str":                 e.subStr,
+		"contact":                 e.contact,
+		"index_of":                e.indexOf,
+	}
+
+	return e
+}
+
+type Extractor struct {
+	exprCache sync.Map // cache expression parsed result, key is expression, value is ast.Expr
+	funcMap   map[string]func(args []ast.Expr, data map[string]any) (any, error)
+	locker    sync.Locker
+}
+
+func (e *Extractor) Extract(expression string, data map[string]any) (any, error) {
+	expr, err := e.parseExpression(expression)
 	if err != nil {
 		return nil, err
 	}
 
-	return eval(expr, data)
+	return e.eval(expr, data)
 }
 
-func parseExpression(expression string) (expr ast.Expr, err error) {
+func (e *Extractor) parseExpression(expression string) (expr ast.Expr, err error) {
 	if len(expression) == 0 {
 		return nil, emptyExpression
 	}
 
-	if exp, ok := expressionCache.Load(expression); ok {
+	if exp, ok := e.exprCache.Load(expression); ok {
 		expr = exp.(ast.Expr)
 		return
 	}
@@ -39,30 +63,30 @@ func parseExpression(expression string) (expr ast.Expr, err error) {
 	if err != nil {
 		return nil, err
 	}
-	expressionCache.Store(expression, expr)
+	e.exprCache.Store(expression, expr)
 	return
 }
 
-func eval(expr ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) eval(expr ast.Expr, data map[string]any) (any, error) {
 	switch expr := expr.(type) {
 	case *ast.BasicLit: // base type
-		return basicLit(expr)
+		return e.basicLit(expr)
 	case *ast.BinaryExpr: // binary field
-		return evalForBinaryExpr(expr, data)
+		return e.evalForBinaryExpr(expr, data)
 	case *ast.CallExpr:
-		return evalForFunc(expr.Fun.(*ast.Ident).Name, expr.Args, data)
+		return e.evalForFunc(expr.Fun.(*ast.Ident).Name, expr.Args, data)
 	case *ast.ParenExpr: // parenthesized field
-		return eval(expr.X, data)
+		return e.eval(expr.X, data)
 	case *ast.UnaryExpr: // unary field
-		return evalForUnaryExpr(expr, data)
+		return e.evalForUnaryExpr(expr, data)
 	case *ast.Ident: // identifier
-		return evalForIdent(expr, data)
+		return e.evalForIdent(expr, data)
 	default:
 		return nil, fmt.Errorf("unknown ast node type [%s]", expr)
 	}
 }
 
-func basicLit(lit *ast.BasicLit) (value any, err error) {
+func (e *Extractor) basicLit(lit *ast.BasicLit) (value any, err error) {
 	switch lit.Kind {
 	case token.INT:
 		value, err = strconv.ParseInt(lit.Value, 10, 64)
@@ -76,15 +100,15 @@ func basicLit(lit *ast.BasicLit) (value any, err error) {
 	return value, err
 }
 
-func evalForBinaryExpr(expr *ast.BinaryExpr, data map[string]any) (any, error) {
-	x, xErr := eval(expr.X, data)
+func (e *Extractor) evalForBinaryExpr(expr *ast.BinaryExpr, data map[string]any) (any, error) {
+	x, xErr := e.eval(expr.X, data)
 	if xErr != nil {
 		return nil, xErr
 	}
 	if x == nil {
 		return nil, fmt.Errorf("x [%v] is nil", x)
 	}
-	y, yErr := eval(expr.Y, data)
+	y, yErr := e.eval(expr.Y, data)
 
 	if yErr != nil {
 		return nil, yErr
@@ -150,8 +174,8 @@ func evalForBinaryExpr(expr *ast.BinaryExpr, data map[string]any) (any, error) {
 	}
 }
 
-func evalForFunc(funcName string, args []ast.Expr, data map[string]any) (any, error) {
-	handler, ok := funcMap[funcName]
+func (e *Extractor) evalForFunc(funcName string, args []ast.Expr, data map[string]any) (any, error) {
+	handler, ok := e.funcMap[funcName]
 	if !ok {
 		return nil, fmt.Errorf("unknown func %s", funcName)
 	}
@@ -188,8 +212,8 @@ func evalForNum[T int | int32 | int64 | float32 | float64](x, y T, op token.Toke
 	}
 }
 
-func evalForUnaryExpr(expr *ast.UnaryExpr, data map[string]any) (any, error) {
-	x, err := eval(expr.X, data)
+func (e *Extractor) evalForUnaryExpr(expr *ast.UnaryExpr, data map[string]any) (any, error) {
+	x, err := e.eval(expr.X, data)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +226,7 @@ func evalForUnaryExpr(expr *ast.UnaryExpr, data map[string]any) (any, error) {
 	return nil, fmt.Errorf("unknown unary field [%v]", expr)
 }
 
-func evalForIdent(expr *ast.Ident, data map[string]any) (any, error) {
+func (e *Extractor) evalForIdent(expr *ast.Ident, data map[string]any) (any, error) {
 	if expr.Name == "true" { // true
 		return true, nil
 	}

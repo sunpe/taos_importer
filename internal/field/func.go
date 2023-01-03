@@ -12,20 +12,8 @@ import (
 	"github.com/allegro/bigcache/v3"
 )
 
-func init() {
-	funcMap["left_pad"] = leftPad
-	funcMap["right_pad"] = rightPad
-	funcMap["date_parse"] = dateParse
-	funcMap["avoid_datetime_conflict"] = avoidDatetimeConflict
-	funcMap["sub_str"] = subStr
-	funcMap["contact"] = contact
-	funcMap["index_of"] = indexOf
-}
-
-var funcMap = map[string]func(args []ast.Expr, data map[string]any) (any, error){}
-
-func leftPad(args []ast.Expr, data map[string]any) (any, error) {
-	str, padStr, toLength, err := _padParam(args, data)
+func (e *Extractor) leftPad(args []ast.Expr, data map[string]any) (any, error) {
+	str, padStr, toLength, err := e.padParam(args, data)
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +32,8 @@ func leftPad(args []ast.Expr, data map[string]any) (any, error) {
 	return buffer.String(), nil
 }
 
-func rightPad(args []ast.Expr, data map[string]any) (any, error) {
-	str, padStr, toLength, err := _padParam(args, data)
+func (e *Extractor) rightPad(args []ast.Expr, data map[string]any) (any, error) {
+	str, padStr, toLength, err := e.padParam(args, data)
 	if err != nil {
 		return nil, err
 	}
@@ -64,20 +52,20 @@ func rightPad(args []ast.Expr, data map[string]any) (any, error) {
 	return buffer.String(), nil
 }
 
-func subStr(args []ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) subStr(args []ast.Expr, data map[string]any) (any, error) {
 	if len(args) != 3 {
 		return nil, illegalParams
 	}
 
-	strArg, err := eval(args[0], data)
+	strArg, err := e.eval(args[0], data)
 	if err != nil {
 		return nil, err
 	}
-	startArg, err := eval(args[1], data)
+	startArg, err := e.eval(args[1], data)
 	if err != nil {
 		return nil, err
 	}
-	endArg, err := eval(args[2], data)
+	endArg, err := e.eval(args[2], data)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +87,11 @@ func subStr(args []ast.Expr, data map[string]any) (any, error) {
 	return str[start:end], nil
 }
 
-func contact(args []ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) contact(args []ast.Expr, data map[string]any) (any, error) {
 	ss := make([]string, 0, len(args))
 
 	for _, arg := range args {
-		strArg, err := eval(arg, data)
+		strArg, err := e.eval(arg, data)
 		if err != nil {
 			return nil, err
 		}
@@ -113,16 +101,16 @@ func contact(args []ast.Expr, data map[string]any) (any, error) {
 	return strings.Join(ss, ""), nil
 }
 
-func indexOf(args []ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) indexOf(args []ast.Expr, data map[string]any) (any, error) {
 	if len(args) != 2 {
 		return nil, illegalParams
 	}
 
-	strArg, err := eval(args[0], data)
+	strArg, err := e.eval(args[0], data)
 	if err != nil {
 		return nil, err
 	}
-	subStrArg, err := eval(args[1], data)
+	subStrArg, err := e.eval(args[1], data)
 	if err != nil {
 		return nil, err
 	}
@@ -133,20 +121,23 @@ func indexOf(args []ast.Expr, data map[string]any) (any, error) {
 	return strings.Index(str, sub), nil
 }
 
-func dateParse(args []ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) dateParse(args []ast.Expr, data map[string]any) (any, error) {
 	if len(args) != 3 {
 		return nil, illegalParams
 	}
 
-	dateArg, err := eval(args[0], data)
+	dateArg, err := e.eval(args[0], data)
 	if err != nil {
 		return nil, err
 	}
-	formatArg, err := eval(args[1], data)
+	formatArg, err := e.eval(args[1], data)
 	if err != nil {
 		return nil, err
 	}
-	locationArg, err := eval(args[2], data)
+	locationArg, err := e.eval(args[2], data)
+	if err != nil {
+		return nil, err
+	}
 	location, err := time.LoadLocation(common.String(locationArg))
 	if err != nil {
 		return nil, err
@@ -155,17 +146,17 @@ func dateParse(args []ast.Expr, data map[string]any) (any, error) {
 	date := common.String(dateArg)
 	format := common.String(formatArg) // YYYY MM DD 格式
 
-	return _parseDate(format, date, location)
+	return parseDate(format, date, location)
 }
 
 var usedDatetime *datetimeCache
 var avoidDatetimeLocker sync.Mutex
 
-func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
+func (e *Extractor) avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 	if len(args) != 3 {
 		return nil, illegalParams
 	}
-	dateArg, err := eval(args[0], data)
+	dateArg, err := e.eval(args[0], data)
 	if err != nil {
 		return nil, err
 	}
@@ -179,11 +170,11 @@ func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 		defer avoidDatetimeLocker.Unlock()
 
 		if usedDatetime == nil {
-			durationArg, err := eval(args[1], data) // cache duration
+			durationArg, err := e.eval(args[1], data) // cache duration
 			if err != nil {
 				return nil, err
 			}
-			precisionArg, err := eval(args[2], data) //timestamp precision
+			precisionArg, err := e.eval(args[2], data) //timestamp precision
 			if err != nil {
 				return nil, err
 			}
@@ -194,7 +185,7 @@ func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 			}
 			precision := common.String(precisionArg)
 
-			usedDatetime = newDatetimeCache(time.Duration(duration)*time.Millisecond, precision)
+			usedDatetime = newDatetimeCache(time.Duration(duration)*time.Millisecond, precision, e.locker)
 		}
 	}
 
@@ -203,19 +194,19 @@ func avoidDatetimeConflict(args []ast.Expr, data map[string]any) (any, error) {
 	return date, nil
 }
 
-func _padParam(args []ast.Expr, data map[string]any) (string, string, int, error) {
+func (e *Extractor) padParam(args []ast.Expr, data map[string]any) (string, string, int, error) {
 	if len(args) != 3 {
 		return "", "", 0, illegalParams
 	}
-	strArg, err := eval(args[0], data)
+	strArg, err := e.eval(args[0], data)
 	if err != nil {
 		return "", "", 0, err
 	}
-	padStrArg, err := eval(args[1], data)
+	padStrArg, err := e.eval(args[1], data)
 	if err != nil {
 		return "", "", 0, err
 	}
-	toLengthArg, err := eval(args[2], data)
+	toLengthArg, err := e.eval(args[2], data)
 	if err != nil {
 		return "", "", 0, err
 	}
@@ -226,7 +217,7 @@ func _padParam(args []ast.Expr, data map[string]any) (string, string, int, error
 	return str, padStr, toLength, err
 }
 
-func _parseDate(format, date string, location *time.Location) (time.Time, error) {
+func parseDate(format, date string, location *time.Location) (time.Time, error) {
 	if strings.Contains(format, "YYYY") {
 		format = strings.ReplaceAll(format, "YYYY", "2006")
 	}
@@ -255,18 +246,18 @@ func _parseDate(format, date string, location *time.Location) (time.Time, error)
 		format = strings.ReplaceAll(format, "ss", "05")
 	}
 	// 纳秒
-	format, date = _nsFormatStyle(format, date, "SSSSSSSSS", "000000000")
+	format, date = nsFormatStyle(format, date, "SSSSSSSSS", "000000000")
 
 	// 微秒
-	format, date = _nsFormatStyle(format, date, "SSSSSS", "000000")
+	format, date = nsFormatStyle(format, date, "SSSSSS", "000000")
 
 	// 毫秒
-	format, date = _nsFormatStyle(format, date, "SSS", "000")
+	format, date = nsFormatStyle(format, date, "SSS", "000")
 
 	return time.ParseInLocation(format, date, location)
 }
 
-func _nsFormatStyle(format, date string, old, new string) (string, string) {
+func nsFormatStyle(format, date string, old, new string) (string, string) {
 	if index := strings.Index(format, old); index > 0 {
 		format = strings.ReplaceAll(format, old, new)
 		if format[index-1:index] != "." {
@@ -280,16 +271,16 @@ func _nsFormatStyle(format, date string, old, new string) (string, string) {
 type datetimeCache struct {
 	data      *bigcache.BigCache
 	precision string
-	lock      sync.Mutex
+	lock      sync.Locker
 }
 
-func newDatetimeCache(duration time.Duration, precision string) *datetimeCache {
+func newDatetimeCache(duration time.Duration, precision string, locker sync.Locker) *datetimeCache {
 	cacheConf := bigcache.DefaultConfig(duration)
 	cacheConf.CleanWindow = 100 * duration
 	cacheConf.Verbose = false
 	cache, _ := bigcache.New(context.Background(), cacheConf)
 
-	return &datetimeCache{data: cache, precision: precision}
+	return &datetimeCache{data: cache, precision: precision, lock: locker}
 }
 
 func (c *datetimeCache) cacheAndGet(x time.Time) time.Time {

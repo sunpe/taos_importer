@@ -92,7 +92,7 @@ func TestCsvImporter_Import(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	t.Log("## total ", c.total.Load())
-	t.Log("## error ", c.errorCount.Load())
-	t.Log("## spend ", c.end.Sub(c.start).Milliseconds())
+	t.Log("## total ", c.Total.Load())
+	t.Log("## error ", c.ErrorCount.Load())
+	t.Log("## spend ", c.End.Sub(c.Start).Milliseconds())
 }

@@ -40,7 +40,7 @@ func TestExtract(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			res, err := Extract(c.expression, c.data)
+			res, err := DefaultExtractor.Extract(c.expression, c.data)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -54,6 +54,6 @@ func TestExtract(t *testing.T) {
 func BenchmarkExtract(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Extract("date_parse(date + left_pad(time, \"0\", 9), \"YYYYMMDDHHmmssSSS\")", map[string]any{"date": "20221123", "time": "94625100"})
+		_, _ = DefaultExtractor.Extract("date_parse(date + left_pad(time, \"0\", 9), \"YYYYMMDDHHmmssSSS\")", map[string]any{"date": "20221123", "time": "94625100"})
 	}
 }

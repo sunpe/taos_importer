@@ -1,7 +1,7 @@
 # optional. 配置文件 title optional
 title = "数据导入样例"
 # optional. 是否自动创建所配置的DB和超级表, true|false, 默认 true. 同命令行参数 auto-create，但优先级低于命令行,
-auto_create = true
+auto_create = false
 # optional. 结果输出的目标文件，同命令行参数 output-file，但优先级低于命令行
 output_file = ""
 # optional. 导入数据所在路径。

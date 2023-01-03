@@ -101,6 +101,7 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 	}
 }
 
+// nolint
 func createDB(ctx context.Context, conf config.Config) {
 	dbUri := getDBUri(conf)
 	dt, err := db_table.NewDatabaseAndTable(dbUri)
@@ -137,6 +138,7 @@ func createDB(ctx context.Context, conf config.Config) {
 	}
 }
 
+// nolint
 func createSTable(ctx context.Context, conf config.Config) {
 	dbUri := getDBUri(conf)
 	dt, err := db_table.NewDatabaseAndTable(dbUri)
@@ -203,7 +205,7 @@ func tableParam(db, stable, tableNamePattern string, line map[string]string, tag
 	tagValues := make([]db_table.TagValue, 0, len(tags))
 
 	for _, tag := range tags {
-		tagValue, err := field.Extract(tag.Source, lineData)
+		tagValue, err := field.DefaultExtractor.Extract(tag.Source, lineData)
 		if err != nil {
 			log.Printf("## get tag -[%s] value error %v", tag.Field, err)
 			os.Exit(1)
