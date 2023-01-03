@@ -7,7 +7,7 @@ output_file = ""
 # optional. 导入数据所在路径。
 # 如果指定该参数，则所有文件名相关的配置如果不是绝对路径的话即在该目录下以相对路径进行搜索。
 # 如果未指定该参数，则所有文件名相关的配置必须为绝对路径。
-data_dir = "/Users/sunpeng/workspace/tmp/taos/data/20221227"
+data_dir = "/Users/sunpeng/workspace/tmp/taos/data"
 # optional. 数据文件名后缀，仅在指定了 data_dir 时有效。此时要处理的文件集合为 data_dir 下符合后缀名规则的所有文件。
 # 在 data_dir 设置的情况下，data_files 和 file_suffix 互斥，二者只可取其一。
 # 在 data_dir 未设置的情况下，file_suffix 被忽略，设置无效。
