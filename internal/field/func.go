@@ -134,7 +134,7 @@ func indexOf(args []ast.Expr, data map[string]any) (any, error) {
 }
 
 func dateParse(args []ast.Expr, data map[string]any) (any, error) {
-	if len(args) != 2 {
+	if len(args) != 3 {
 		return nil, illegalParams
 	}
 
@@ -146,11 +146,16 @@ func dateParse(args []ast.Expr, data map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	locationArg, err := eval(args[2], data)
+	location, err := time.LoadLocation(common.String(locationArg))
+	if err != nil {
+		return nil, err
+	}
 
 	date := common.String(dateArg)
 	format := common.String(formatArg) // YYYY MM DD 格式
 
-	return _parseDate(format, date)
+	return _parseDate(format, date, location)
 }
 
 var usedDatetime *datetimeCache
@@ -221,7 +226,7 @@ func _padParam(args []ast.Expr, data map[string]any) (string, string, int, error
 	return str, padStr, toLength, err
 }
 
-func _parseDate(format, date string) (time.Time, error) {
+func _parseDate(format, date string, location *time.Location) (time.Time, error) {
 	if strings.Contains(format, "YYYY") {
 		format = strings.ReplaceAll(format, "YYYY", "2006")
 	}
@@ -258,7 +263,7 @@ func _parseDate(format, date string) (time.Time, error) {
 	// 毫秒
 	format, date = _nsFormatStyle(format, date, "SSS", "000")
 
-	return time.Parse(format, date)
+	return time.ParseInLocation(format, date, location)
 }
 
 func _nsFormatStyle(format, date string, old, new string) (string, string) {
@@ -281,6 +286,7 @@ type datetimeCache struct {
 func newDatetimeCache(duration time.Duration, precision string) *datetimeCache {
 	cacheConf := bigcache.DefaultConfig(duration)
 	cacheConf.CleanWindow = 100 * duration
+	cacheConf.Verbose = false
 	cache, _ := bigcache.New(context.Background(), cacheConf)
 
 	return &datetimeCache{data: cache, precision: precision}
