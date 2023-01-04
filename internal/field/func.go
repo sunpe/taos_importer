@@ -276,7 +276,7 @@ type datetimeCache struct {
 
 func newDatetimeCache(duration time.Duration, precision string, locker sync.Locker) *datetimeCache {
 	cacheConf := bigcache.DefaultConfig(duration)
-	cacheConf.CleanWindow = 100 * duration
+	cacheConf.CleanWindow = 10 * duration
 	cacheConf.Verbose = false
 	cache, _ := bigcache.New(context.Background(), cacheConf)
 

@@ -13,6 +13,7 @@ type Config struct {
 	BatchSize      int      `json:"batch_size,omitempty" yaml:"batch_size" toml:"batch_size"`
 	DealOneTime    int      `json:"deal_one_time" yaml:"deal_one_time" toml:"deal_one_time"`
 	Concurrent     int      `json:"concurrent" yaml:"concurrent" toml:"concurrent"`
+	Pprof          bool     `json:"pprof" yaml:"pprof" toml:"pprof"`
 	TDEngine       TDEngine `json:"tdengine" yaml:"tdengine" toml:"tdengine"`
 	DB             Database `json:"db" yaml:"db" toml:"db"`
 	STable         STable   `json:"stable" yaml:"stable" toml:"stable"`

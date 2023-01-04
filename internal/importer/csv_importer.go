@@ -85,7 +85,7 @@ func (c *CsvImporter) Import(ctx context.Context, csvPath string) (err error) {
 func (c *CsvImporter) doImport(ctx context.Context, ch chan map[string]string, wait *sync.WaitGroup) {
 	defer wait.Done()
 
-	tickerDuration := 200 * time.Millisecond
+	tickerDuration := 100 * time.Millisecond
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
@@ -119,12 +119,13 @@ func (c *CsvImporter) do(_ context.Context, lines []map[string]any) {
 	}
 
 	stmt := c.conn.InsertStmt()
+	defer func() { _ = stmt.Close() }()
+
 	err := stmt.Prepare(c.insertSql)
 	if err != nil {
 		log.Printf("## prepare sql %s error %v", c.insertSql, err)
 		return
 	}
-	defer func() { _ = stmt.Close() }()
 
 	c.Total.Add(int64(len(lines)))
 	params, err := c.params(lines)

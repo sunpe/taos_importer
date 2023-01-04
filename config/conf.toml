@@ -29,6 +29,8 @@ batch_size = 10
 deal_one_time = 3
 # 最大并发处理
 concurrent = 5
+# pprof
+pprof = true
 
 [tdengine]
 # Required. tdengine host

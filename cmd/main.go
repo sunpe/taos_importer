@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,7 +25,6 @@ import (
 
 func main() {
 	ctx := context.Background()
-
 	importCmd := flag.NewFlagSet("import", flag.ExitOnError)
 	confFile := importCmd.String("conf", "", "config file path. Required!")
 	autoCreate := importCmd.Bool("auto-create", true, "auto create database, stable, tables. Optional, default is true")
@@ -50,6 +51,7 @@ func main() {
 }
 
 func importData(ctx context.Context, configFile string, autoCreate *bool, outputFile *string) {
+	log.Println("## start to import data. config file is ", configFile)
 	f, err := os.Open(configFile)
 	if err != nil {
 		log.Printf("## open config file [%s] error %v", configFile, err)
@@ -66,6 +68,14 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 	if err = toml.Unmarshal(b, &conf); err != nil {
 		log.Printf("## read config file [%s] fail %v", configFile, err)
 		os.Exit(1)
+	}
+
+	if conf.Pprof {
+		go func() {
+			if err := http.ListenAndServe(":8000", nil); err != nil {
+				panic(err)
+			}
+		}()
 	}
 
 	if autoCreate != nil && *autoCreate {
@@ -97,6 +107,8 @@ func importData(ctx context.Context, configFile string, autoCreate *bool, output
 		_, _ = logfile.WriteString(msg)
 		_, _ = logfile.WriteString("\n")
 	}
+
+	log.Println("## importing data finished. config file is ", configFile)
 }
 
 // nolint
